@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Staff Attendance Report - Cafe POS Admin</title>
+    <!-- Include Bootstrap CSS -->
+    <link href="../bootstrap-5.3.3-dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Include Bootstrap Icons -->
+    <link rel="stylesheet" href="../vendor/twbs/bootstrap-icons/font/bootstrap-icons.css">
 </head>
 <body>
-    Staff Attendance Report
-    <div class="container">
+    <?php include 'navbar.php'; ?>
+    <div class="container mt-4">
         <h1>Staff Attendance Report</h1>
         <table class="table table-striped">
             <thead>
@@ -36,5 +40,8 @@
                 ?>
             </tbody>
         </table>
+    </div>
+    <!-- Include Bootstrap JS -->
+    <script src="../bootstrap-5.3.3-dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
