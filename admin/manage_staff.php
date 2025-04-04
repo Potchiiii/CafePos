@@ -1,7 +1,6 @@
 <?php
 // manage_staff.php
 session_start();
-
 // Check if the user is logged in and has admin privileges
 
 if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
