@@ -1,4 +1,9 @@
 <?php
+session_start();
+if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
+    header("Location: ../index.php");
+    exit;
+}
 include '../db.php'; // Ensure this file sets up $pdo with your PDO connection
 
 // Get the start and end dates for the current week

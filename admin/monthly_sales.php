@@ -1,6 +1,10 @@
 <?php
 // monthly_sales.php
-
+session_start();
+if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
+    header("Location: ../index.php");
+    exit;
+}
 // Include the database connection
 require_once '../db.php';
 

@@ -2,6 +2,9 @@
 // index.php
 session_start();
 
+// Include the database connection
+require_once 'db.php';
+
 // If already logged in, redirect based on role
 if (isset($_SESSION['user'])) {
     switch ($_SESSION['user']['role']) {
@@ -32,21 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (empty($username) || empty($password) || empty($role)) {
         $error = "Please fill in all fields.";
     } else {
-        // Database configuration – update these values with your own
-        $host = 'localhost';
-        $db   = 'cafe_pos';
-        $user = 'root';
-        $pass = '';
-        $charset = 'utf8mb4';
-
-        $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
-        $options = [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        ];
-
         try {
-            $pdo = new PDO($dsn, $user, $pass, $options);
             // Fetch user record by username and role
             $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ? AND role = ?");
             $stmt->execute([$username, $role]);

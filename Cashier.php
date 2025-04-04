@@ -1,6 +1,13 @@
 <?php
 // cashier.php
 
+session_start();
+
+if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'cashier') {
+    header("Location: ./index.php");
+    exit;
+}
+
 include 'db.php'; // Ensure this file sets up $pdo with your PDO connection
 
 // If this is a POST request for checkout, process the order

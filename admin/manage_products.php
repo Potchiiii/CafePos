@@ -1,21 +1,18 @@
 <?php
 session_start();
+// Check if the user is logged in and has admin privileges
 
+if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
+    header("Location: ../index.php");
+    exit;
+}
 // Include the database connection (db.php)
 include '../db.php';
 
-// Create the products table if it doesn't exist (including the new category column)
-$createTableQuery = "CREATE TABLE IF NOT EXISTS products (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    category ENUM('Drink','Food') NOT NULL DEFAULT 'Drink',
-    price_16oz DECIMAL(10,2),
-    price_20oz DECIMAL(10,2),
-    food_price DECIMAL(10,2),
-    file_path VARCHAR(255) DEFAULT NULL
-) ENGINE=INNODB";
-$pdo->exec($createTableQuery);
+if (!isset($_SESSION['user'])) {
+    header("Location: ../index.php");
+    exit;
+}
 
 $editProduct = '';
 

@@ -35,6 +35,10 @@ $currentPage = basename($_SERVER['PHP_SELF']);
             Monthly Sales Report 
           </a>
         </li>
+        <li class="nav-item me-3">
+          <a class="nav-link <?php echo ($currentPage == 'attendance.php') ? 'active' : ''; ?>" href="attendance.php">
+            Staff Attendance
+          </a>
       </ul>
       <!-- Logout button -->
       <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
