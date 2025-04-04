@@ -10,8 +10,9 @@ $createTableQuery = "CREATE TABLE IF NOT EXISTS products (
     name VARCHAR(255) NOT NULL,
     description TEXT,
     category ENUM('Drink','Food') NOT NULL DEFAULT 'Drink',
-    price_16oz DECIMAL(10,2) NOT NULL,
-    price_20oz DECIMAL(10,2) NOT NULL,
+    price_16oz DECIMAL(10,2),
+    price_20oz DECIMAL(10,2),
+    food_price DECIMAL(10,2),
     file_path VARCHAR(255) DEFAULT NULL
 ) ENGINE=INNODB";
 $pdo->exec($createTableQuery);
@@ -25,24 +26,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_product'])) {
     $description = trim($_POST['description'] ?? '');
     $category = $_POST['category'] ?? 'Drink';
 
-    // For Food, use a single price for both sizes; for Drink, expect two prices.
+    // Set prices based on category
     if ($category === 'Food') {
-        $price = trim($_POST['price_food'] ?? '');
-        $price_16oz = $price;
-        $price_20oz = $price;
+        $food_price = trim($_POST['price_food'] ?? '');
+        $price_16oz = null;
+        $price_20oz = null;
     } else {
+        $food_price = null;
         $price_16oz = trim($_POST['price_16oz'] ?? '');
         $price_20oz = trim($_POST['price_20oz'] ?? '');
     }
-    
-    if (empty($name) || ($category === 'Drink' && ($price_16oz === '' || $price_20oz === '')) || ($category === 'Food' && $price === '')) {
+
+    if (empty($name) || ($category === 'Drink' && ($price_16oz === '' || $price_20oz === '')) || ($category === 'Food' && $food_price === '')) {
         $error = "Please fill in the required fields.";
     } else {
-        // Get the current file path from the hidden input
         $old_file_path = $_POST['current_file_path'] ?? '';
-        $file_path = $old_file_path; // default to old image
-        
-        // Check if a new image has been uploaded
+        $file_path = $old_file_path;
+
         if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
             $uploadDir = 'products/';
             if (!is_dir($uploadDir)) {
@@ -52,15 +52,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_product'])) {
             $targetFilePath = $uploadDir . $filename;
             if (move_uploaded_file($_FILES['image']['tmp_name'], $targetFilePath)) {
                 $file_path = $targetFilePath;
-                // Delete the old image if it exists and is different from the new one
                 if (!empty($old_file_path) && file_exists($old_file_path) && $old_file_path !== $targetFilePath) {
                     unlink($old_file_path);
                 }
             }
         }
-        // Update the product record
-        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, category = ?, price_16oz = ?, price_20oz = ?, file_path = ? WHERE id = ?");
-        $stmt->execute([$name, $description, $category, $price_16oz, $price_20oz, $file_path, $updateId]);
+        $stmt = $pdo->prepare("UPDATE products SET name = ?, description = ?, category = ?, price_16oz = ?, price_20oz = ?, food_price = ?, file_path = ? WHERE id = ?");
+        $stmt->execute([$name, $description, $category, $price_16oz, $price_20oz, $food_price, $file_path, $updateId]);
         header("Location: manage_products.php");
         exit;
     }
@@ -72,16 +70,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_product'])) {
     $description = trim($_POST['description'] ?? '');
     $category = $_POST['category'] ?? 'Drink';
 
+    // Set prices based on category
     if ($category === 'Food') {
-        $price = trim($_POST['price_food'] ?? '');
-        $price_16oz = $price;
-        $price_20oz = $price;
+        $food_price = trim($_POST['price_food'] ?? '');
+        $price_16oz = null;
+        $price_20oz = null;
     } else {
+        $food_price = null;
         $price_16oz = trim($_POST['price_16oz'] ?? '');
         $price_20oz = trim($_POST['price_20oz'] ?? '');
     }
-    
-    if (empty($name) || ($category === 'Drink' && ($price_16oz === '' || $price_20oz === '')) || ($category === 'Food' && $price === '')) {
+
+    if (empty($name) || ($category === 'Drink' && ($price_16oz === '' || $price_20oz === '')) || ($category === 'Food' && $food_price === '')) {
         $error = "Please fill in the required fields.";
     } else {
         $file_path = '';
@@ -96,8 +96,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_product'])) {
                 $file_path = $targetFilePath;
             }
         }
-        $stmt = $pdo->prepare("INSERT INTO products (name, description, category, price_16oz, price_20oz, file_path) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([$name, $description, $category, $price_16oz, $price_20oz, $file_path]);
+        $stmt = $pdo->prepare("INSERT INTO products (name, description, category, price_16oz, price_20oz, food_price, file_path) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$name, $description, $category, $price_16oz, $price_20oz, $food_price, $file_path]);
         header("Location: manage_products.php");
         exit;
     }
@@ -176,32 +176,36 @@ $products = $stmt->fetchAll();
           </div>
           <div class="col-md-2">
               <label for="editCategory" class="form-label">Category</label>
-              <select name="category" id="editCategory" class="form-select" required>
+              <select name="category" id="editCategory" class="form-select" disabled>
                   <option value="Drink" <?php echo ($editProduct['category'] === 'Drink') ? 'selected' : ''; ?>>Drink</option>
                   <option value="Food" <?php echo ($editProduct['category'] === 'Food') ? 'selected' : ''; ?>>Food</option>
               </select>
+              <input type="hidden" name="category" value="<?php echo htmlspecialchars($editProduct['category']); ?>">
           </div>
           <!-- Price inputs for Drink -->
-          <div id="editDrinkPrices" class="row g-3">
-              <div class="col-md-2">
-                  <label for="price_16oz" class="form-label">Price (16oz)</label>
-                  <input type="number" name="price_16oz" id="price_16oz" step="0.01" class="form-control" value="<?php echo htmlspecialchars($editProduct['price_16oz']); ?>" required>
+          <?php if ($editProduct['category'] === 'Drink'): ?>
+              <div id="editDrinkPrices" class="row g-3">
+                  <div class="col-md-2">
+                      <label for="price_16oz" class="form-label">Price (16oz)</label>
+                      <input type="number" name="price_16oz" id="price_16oz" step="0.01" class="form-control" value="<?php echo htmlspecialchars($editProduct['price_16oz']); ?>" required>
+                  </div>
+                  <div class="col-md-2">
+                      <label for="price_20oz" class="form-label">Price (20oz)</label>
+                      <input type="number" name="price_20oz" id="price_20oz" step="0.01" class="form-control" value="<?php echo htmlspecialchars($editProduct['price_20oz']); ?>" required>
+                  </div>
               </div>
-              <div class="col-md-2">
-                  <label for="price_20oz" class="form-label">Price (20oz)</label>
-                  <input type="number" name="price_20oz" id="price_20oz" step="0.01" class="form-control" value="<?php echo htmlspecialchars($editProduct['price_20oz']); ?>" required>
+          <?php elseif ($editProduct['category'] === 'Food'): ?>
+              <!-- Single price input for Food -->
+              <div id="editFoodPrice" class="col-md-4">
+                  <label for="price_food" class="form-label">Price</label>
+                  <input type="number" name="price_food" id="price_food" step="0.01" class="form-control" value="<?php echo htmlspecialchars($editProduct['food_price']); ?>" required>
               </div>
-          </div>
-          <!-- Single price input for Food -->
-          <div id="editFoodPrice" class="col-md-4" style="display: none;">
-              <label for="price_food" class="form-label">Price</label>
-              <input type="number" name="price_food" id="price_food" step="0.01" class="form-control" value="<?php echo htmlspecialchars($editProduct['price_16oz']); ?>">
-          </div>
+          <?php endif; ?>
           <div class="col-md-2">
               <label for="image" class="form-label">Product Image</label>
               <input type="file" name="image" id="image" class="form-control">
-              <?php if($editProduct['file_path']): ?>
-                <img src="./<?php echo htmlspecialchars($editProduct['file_path']); ?>" alt="<?php echo htmlspecialchars($editProduct['name']); ?>" class="img-thumbnail mt-2" style="max-width: 100px;">
+              <?php if ($editProduct['file_path']): ?>
+                  <img src="./<?php echo htmlspecialchars($editProduct['file_path']); ?>" alt="<?php echo htmlspecialchars($editProduct['name']); ?>" class="img-thumbnail mt-2" style="max-width: 100px;">
               <?php endif; ?>
           </div>
           <div class="col-md-12">
@@ -253,30 +257,36 @@ $products = $stmt->fetchAll();
     <ul class="list-group">
         <?php foreach ($products as $product): ?>
         <li class="list-group-item">
-          <div class="row align-items-center">
-            <div class="col-md-2">
-               <?php if($product['file_path']): ?>
-                   <img src="./<?php echo htmlspecialchars($product['file_path']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="img-thumbnail" style="max-width: 100px;">
-               <?php else: ?>
-                   <span>No image</span>
-               <?php endif; ?>
+            <div class="row align-items-center">
+                <div class="col-md-2">
+                    <?php if ($product['file_path']): ?>
+                        <img src="./<?php echo htmlspecialchars($product['file_path']); ?>" alt="<?php echo htmlspecialchars($product['name']); ?>" class="img-thumbnail" style="max-width: 100px;">
+                    <?php else: ?>
+                        <span>No image</span>
+                    <?php endif; ?>
+                </div>
+                <div class="col-md-4">
+                    <h5><?php echo htmlspecialchars($product['name']); ?></h5>
+                    <p><?php echo htmlspecialchars($product['description']); ?></p>
+                    <p><strong>Category:</strong> <?php echo htmlspecialchars($product['category']); ?></p>
+                </div>
+                <?php if ($product['category'] === 'Drink'): ?>
+                    <div class="col-md-2">
+                        <p><strong>16oz:</strong><br>₱<?php echo number_format($product['price_16oz'], 2); ?></p>
+                    </div>
+                    <div class="col-md-2">
+                        <p><strong>20oz:</strong><br>₱<?php echo number_format($product['price_20oz'], 2); ?></p>
+                    </div>
+                <?php elseif ($product['category'] === 'Food'): ?>
+                    <div class="col-md-2">
+                        <p><strong>Food Price:</strong><br>₱<?php echo number_format($product['food_price'], 2); ?></p>
+                    </div>
+                <?php endif; ?>
+                <div class="col-md-2 text-end">
+                    <a href="manage_products.php?edit=<?php echo $product['id']; ?>" class="btn btn-primary btn-sm">Edit</a>
+                    <a href="manage_products.php?delete=<?php echo $product['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this product?');">Delete</a>
+                </div>
             </div>
-            <div class="col-md-4">
-               <h5><?php echo htmlspecialchars($product['name']); ?></h5>
-               <p><?php echo htmlspecialchars($product['description']); ?></p>
-               <p><strong>Category:</strong> <?php echo htmlspecialchars($product['category']); ?></p>
-            </div>
-            <div class="col-md-1">
-               <p><strong>16oz:</strong><br>₱<?php echo number_format($product['price_16oz'], 2); ?></p>
-            </div>
-            <div class="col-md-1">
-               <p><strong>20oz:</strong><br>₱<?php echo number_format($product['price_20oz'], 2); ?></p>
-            </div>
-            <div class="col-md-2 text-end">
-               <a href="manage_products.php?edit=<?php echo $product['id']; ?>" class="btn btn-primary btn-sm">Edit</a>
-               <a href="manage_products.php?delete=<?php echo $product['id']; ?>" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this product?');">Delete</a>
-            </div>
-          </div>
         </li>
         <?php endforeach; ?>
     </ul>

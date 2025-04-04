@@ -41,8 +41,18 @@ while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
 // Fetch detailed transactions for the current day
 $transactions = [];
 $stmt = $pdo->query("
-    SELECT o.id AS orderId, o.created_at AS timestamp, o.total_amount AS total,
-           GROUP_CONCAT(CONCAT(p.name, ' (', oi.size, ', ', oi.temperature, ') x', oi.quantity) SEPARATOR ', ') AS items
+    SELECT 
+        o.id AS orderId, 
+        o.created_at AS timestamp, 
+        o.total_amount AS total,
+        GROUP_CONCAT(
+            CONCAT(
+                p.name, 
+                IF(oi.size IS NOT NULL, CONCAT(' (', oi.size, ')'), ''), 
+                IF(p.category = 'Drink' AND oi.temperature IS NOT NULL, CONCAT(', ', oi.temperature), ''), 
+                ' x', oi.quantity
+            ) SEPARATOR ', '
+        ) AS items
     FROM orders o
     JOIN order_items oi ON o.id = oi.order_id
     JOIN products p ON oi.product_id = p.id
@@ -160,18 +170,31 @@ $averageOrderValue = $transactionCount ? $totalRevenue / $transactionCount : 0;
   </div>
   
   <script>
+    // Function to generate a random color
+    function getRandomColor() {
+        return `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`;
+    }
+
+    // Function to generate an array of unique colors
+    function generateColors(count) {
+        const colors = [];
+        for (let i = 0; i < count; i++) {
+            colors.push(getRandomColor());
+        }
+        return colors;
+    }
+
     // Prepare data for the Daily General Sales Chart
     var generalLabels = <?php echo json_encode(array_keys($generalSales)); ?>;
     var generalData = <?php echo json_encode(array_values($generalSales)); ?>;
+    var generalColors = generateColors(generalData.length);
 
     // Prepare data for the Daily Time Period Sales Chart
     var summaryLabels = <?php echo json_encode(array_keys($summarySales)); ?>;
     var summaryData = <?php echo json_encode(array_values($summarySales)); ?>;
+    var summaryColors = generateColors(summaryData.length);
 
-    console.log(generalLabels, generalData);
-    console.log(summaryLabels, summaryData);
-
-    // Check if general sales data is empty
+    // General Sales Chart
     if (generalData.length === 0) {
         document.getElementById('generalSalesChart').parentElement.innerHTML = '<p>No sales data available for today.</p>';
     } else {
@@ -182,7 +205,7 @@ $averageOrderValue = $transactionCount ? $totalRevenue / $transactionCount : 0;
                 labels: generalLabels,
                 datasets: [{
                     data: generalData,
-                    backgroundColor: ['#FF6384','#36A2EB','#FFCE56'],
+                    backgroundColor: generalColors,
                 }]
             },
             options: {
@@ -192,7 +215,7 @@ $averageOrderValue = $transactionCount ? $totalRevenue / $transactionCount : 0;
         });
     }
 
-    // Check if summary sales data is empty
+    // Time Period Sales Chart
     if (summaryData.length === 0) {
         document.getElementById('summarySalesChart').parentElement.innerHTML = '<p>No time period sales data available for today.</p>';
     } else {
@@ -203,7 +226,7 @@ $averageOrderValue = $transactionCount ? $totalRevenue / $transactionCount : 0;
                 labels: summaryLabels,
                 datasets: [{
                     data: summaryData,
-                    backgroundColor: ['#4BC0C0','#9966FF','#FF9F40'],
+                    backgroundColor: summaryColors,
                 }]
             },
             options: {

@@ -27,11 +27,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['checkout'])) {
         // Prepare insert for order items into `order_items` table
         $stmt = $pdo->prepare("INSERT INTO order_items (order_id, product_id, size, temperature, quantity, price) VALUES (?, ?, ?, ?, ?, ?)");
         foreach ($order_items as $item) {
-            // Each item should have product_id, size, temperature, quantity, price
+            // For food items, size will be null and temperature defaults to "hot"
             $stmt->execute([
                 $order_id,
                 $item['product_id'],
-                $item['size'], // should be either "16oz" or "20oz"
+                $item['size'], // For drinks: "16oz" or "20oz"; For food: null
                 strtolower($item['temperature']), // store as lowercase e.g., "hot" or "iced"
                 $item['quantity'],
                 $item['price']
@@ -108,21 +108,34 @@ try {
                 <div class="col-8">
                     <div class="card-body">
                         <h5 class="card-title product-name"><?php echo htmlspecialchars($product['name']); ?></h5>
-                        <!-- Displaying the 16oz price as an example -->
-                        <p class="card-text mb-1">₱<span class="price_16oz"><?php echo number_format($product['price_16oz'], 2); ?></span></p>
+                        <?php if ($product['category'] === 'Drink'): ?>
+                            <p class="card-text mb-1">₱<span class="price_16oz"><?php echo number_format($product['price_16oz'], 2); ?></span></p>
+                        <?php elseif ($product['category'] === 'Food'): ?>
+                            <p class="card-text mb-1">₱<span class="food-price"><?php echo number_format($product['food_price'], 2); ?></span></p>
+                        <?php endif; ?>
                         <p class="card-text"><?php echo htmlspecialchars($product['description']); ?></p>
-                        <!-- Size selection -->
-                        <select class="form-select form-select-sm mb-2 product-size" aria-label="Size">
-                            <option value="" selected disabled>Select Size</option>
-                            <option value="small">16 oz</option>
-                            <option value="medium">20 oz</option>
-                        </select>
-                        <!-- Temperature selection -->
-                        <select class="form-select form-select-sm mb-2 product-temp" aria-label="Temperature">
-                            <option value="" selected disabled>Select Temperature</option>
-                            <option value="hot">Hot</option>
-                            <option value="iced">Iced</option>
-                        </select>
+                        
+                        <!-- Hidden input to store product category -->
+                        <input type="hidden" class="product-category" value="<?php echo htmlspecialchars($product['category']); ?>">
+                        
+                        <?php if ($product['category'] === 'Drink'): ?>
+                            <!-- Size selection for drinks -->
+                            <select class="form-select form-select-sm mb-2 product-size" aria-label="Size">
+                                <option value="" selected disabled>Select Size</option>
+                                <option value="small">16 oz</option>
+                                <option value="medium">20 oz</option>
+                            </select>
+                            <!-- Temperature selection for drinks -->
+                            <select class="form-select form-select-sm mb-2 product-temp" aria-label="Temperature">
+                                <option value="" selected disabled>Select Temperature</option>
+                                <option value="hot">Hot</option>
+                                <option value="iced">Iced</option>
+                            </select>
+                        <?php else: ?>
+                            <!-- For food items, no size or temperature selection -->
+                            <p class="mb-2"><strong>Food Item</strong></p>
+                        <?php endif; ?>
+                        
                         <!-- Quantity input -->
                         <div class="input-group input-group-sm mb-2">
                             <span class="input-group-text">Qty</span>
@@ -220,7 +233,7 @@ function updateOrderSummary() {
         li.className = 'list-group-item d-flex justify-content-between align-items-center';
         li.innerHTML = `
             <div>
-                ${item.name} (${item.size}, ${item.temperature}) x${item.quantity} 
+                ${item.name} ${item.size ? '(' + item.size + ', ' + item.temperature + ')' : '(Food Item)'} x${item.quantity} 
                 <span class="ms-2">₱${(item.price * item.quantity).toFixed(2)}</span>
             </div>
             <button class="btn btn-link text-danger p-0" title="Remove item" data-index="${index}">
@@ -250,47 +263,65 @@ document.querySelectorAll('.add-to-order').forEach((button) => {
         const cardBody = this.closest('.card-body');
         const name = cardBody.querySelector('.product-name').textContent;
         const product_id = cardBody.querySelector('.product-id').value;
-        const sizeSelect = cardBody.querySelector('.product-size');
-        const tempSelect = cardBody.querySelector('.product-temp');
+        const category = cardBody.querySelector('.product-category').value;
         const qtyInput = cardBody.querySelector('.product-qty');
-
-        const sizeVal = sizeSelect.value;
-        const temperature = tempSelect.value;
         const quantity = parseInt(qtyInput.value, 10);
+        let price = 0;
+        let size = null;
+        let temperature = "hot"; // default for food
 
-        // Validate selections
-        if (!sizeVal) {
-            alert('Please select a size.');
-            return;
+        if (category === 'Drink') {
+            const sizeSelect = cardBody.querySelector('.product-size');
+            const tempSelect = cardBody.querySelector('.product-temp');
+            const sizeVal = sizeSelect.value;
+            const tempVal = tempSelect.value;
+
+            if (!sizeVal) {
+                alert('Please select a size.');
+                return;
+            }
+            if (!tempVal) {
+                alert('Please select a temperature.');
+                return;
+            }
+
+            // Determine price based on selected size
+            if (sizeVal === 'small') {
+                price = parseFloat(cardBody.querySelector('.price_16oz').textContent.replace(/,/g, ''));
+                size = '16oz';
+            } else if (sizeVal === 'medium') {
+                const price20ozEl = cardBody.querySelector('.price_20oz');
+                if (price20ozEl) {
+                    price = parseFloat(price20ozEl.value);
+                } else {
+                    price = parseFloat(cardBody.querySelector('.price_16oz').textContent.replace(/,/g, ''));
+                }
+                size = '20oz';
+            }
+            // Format temperature: first letter uppercase for display, but stored as lowercase later
+            temperature = tempVal.charAt(0).toUpperCase() + tempVal.slice(1);
+        } else if (category === 'Food') {
+            // For food items, get the price from the displayed food price
+            const priceText = cardBody.querySelector('.food-price').textContent.replace(/[^0-9\.]/g, '');
+            if (priceText === "" || isNaN(priceText)) {
+                alert('Price for this food item is not set.');
+                return;
+            }
+            price = parseFloat(priceText);
+            // For food, size remains null and temperature defaults to "hot"
         }
-        if (!temperature) {
-            alert('Please select a temperature.');
-            return;
-        }
+
         if (quantity < 1) {
             alert('Quantity must be at least 1.');
             return;
-        }
-
-        // Determine price based on selected size
-        let price = 0;
-        if (sizeVal === 'small') {
-            price = parseFloat(cardBody.querySelector('.price_16oz').textContent.replace(/,/g, ''));
-        } else if (sizeVal === 'medium') {
-            const price20ozEl = cardBody.querySelector('.price_20oz');
-            if (price20ozEl) {
-                price = parseFloat(price20ozEl.value);
-            } else {
-                price = parseFloat(cardBody.querySelector('.price_16oz').textContent.replace(/,/g, ''));
-            }
         }
 
         // Build order item object
         const orderItem = {
             product_id: product_id,
             name: name,
-            size: sizeVal === 'small' ? '16oz' : '20oz',
-            temperature: temperature.charAt(0).toUpperCase() + temperature.slice(1),
+            size: size, // For drinks: "16oz"/"20oz"; for food: null
+            temperature: temperature, // For drinks: based on selection; for food: default "hot"
             quantity: quantity,
             price: price
         };
@@ -299,8 +330,10 @@ document.querySelectorAll('.add-to-order').forEach((button) => {
         orderItems.push(orderItem);
         alert('Item added to order!');
         // Optionally, reset selections
-        sizeSelect.selectedIndex = 0;
-        tempSelect.selectedIndex = 0;
+        if (category === 'Drink') {
+            cardBody.querySelector('.product-size').selectedIndex = 0;
+            cardBody.querySelector('.product-temp').selectedIndex = 0;
+        }
         qtyInput.value = 1;
     });
 });
@@ -345,7 +378,7 @@ document.getElementById('checkoutButton').addEventListener('click', function() {
             // Clear the customer name input field
             document.getElementById('customerName').value = '';
 
-            // Reset all product input fields (size, temperature, quantity)
+            // Reset all product input fields (for drinks)
             document.querySelectorAll('.product-size').forEach(select => select.selectedIndex = 0);
             document.querySelectorAll('.product-temp').forEach(select => select.selectedIndex = 0);
             document.querySelectorAll('.product-qty').forEach(input => input.value = 1);
